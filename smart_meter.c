@@ -2,6 +2,7 @@
 #include <linux/kernel.h> //This is the core header that tells the compiler, "Hey, this isn't a normal program; this is a kernel plug-in
 #include <linux/module.h> //This gives us access to our megaphone: printk
 #include <linux/kprobes.h>
+#include <linux/sched.h>
 
 // Module metadata (Required, otherwise the kernel might reject it as "tainted")
 MODULE_LICENSE("GPL");
@@ -10,11 +11,27 @@ MODULE_DESCRIPTION("Smart Meter Telemetry Base Module");
 MODULE_VERSION("1.0");
 
 static struct kprobe exec_trap;//In C, the kernel uses a structure to define the trap. We define this globally (outside of any function) so both our init and exit functions can see it.
-
 //When a kprobe triggers, it looks for a specific function attached to it called a pre_handler (because it runs before the original function executes).
 // This is the function that runs every time the tripwire is hit
 static int my_hook_function(struct kprobe *p, struct pt_regs *regs) { //The kernel dictates exactly what this function must look like. It always takes two arguments: a pointer to the trap itself, and a pointer to the CPU registers
-    printk(KERN_INFO "ROOTKIT DETECTOR: Tripwire triggered! execve called.\n");
+
+    /* * The 'current' macro is a magical global pointer provided by <linux/sched.h>.
+     * It ALWAYS points to the task_struct (the DNA) of the process currently
+     * running on the CPU. Because this process just asked the CPU to execute
+     * a new command, 'current' is our suspect.
+     * * current->pid  : The Process ID (integer)
+     * current->comm : The short name of the executable (string)
+     */
+
+    printk(KERN_INFO "ROOTKIT DETECTOR: PID %d executed [%s]\n", current->pid, current->comm);
+
+    /*
+     * We MUST return 0 here.
+     * Returning 0 tells the kernel: "I am done observing. Please allow the
+     * original __x64_sys_execve function to proceed normally."
+     * (If we returned a non-zero value, we would accidentally block the program from launching!)
+     */
+
     return 0; // Return 0 to let the original program continue running
 }
 
