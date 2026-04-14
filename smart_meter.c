@@ -23,8 +23,15 @@ static int my_hook_function(struct kprobe *p, struct pt_regs *regs) { //The kern
      * current->comm : The short name of the executable (string)
      */
 
-    printk(KERN_INFO "ROOTKIT DETECTOR: PID %d executed [%s]\n", current->pid, current->comm);
+     //current_uid().val gives us which user id is executing the program or command. 0= root
 
+    // 1. Extract the UID
+    int user_id=current_uid().val;
+    // 2. Trap 1: Privilege Escalation Check
+    if (user_id==0) {
+        // We only scream if UID is 0 (Root)
+        printk(KERN_INFO "ROOTKIT DETECTED: ROOT PRIVILEGE EXECUTION CAUGHT: PID [%d] running [%s]\n",current->pid,current->comm );
+    }
     /*
      * We MUST return 0 here.
      * Returning 0 tells the kernel: "I am done observing. Please allow the
@@ -32,6 +39,7 @@ static int my_hook_function(struct kprobe *p, struct pt_regs *regs) { //The kern
      * (If we returned a non-zero value, we would accidentally block the program from launching!)
      */
 
+    // 3. Let the original program run
     return 0; // Return 0 to let the original program continue running
 }
 
