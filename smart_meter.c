@@ -14,7 +14,6 @@ static struct kprobe exec_trap;//In C, the kernel uses a structure to define the
 //When a kprobe triggers, it looks for a specific function attached to it called a pre_handler (because it runs before the original function executes).
 // This is the function that runs every time the tripwire is hit
 static int my_hook_function(struct kprobe *p, struct pt_regs *regs) { //The kernel dictates exactly what this function must look like. It always takes two arguments: a pointer to the trap itself, and a pointer to the CPU registers
-
     /* * The 'current' macro is a magical global pointer provided by <linux/sched.h>.
      * It ALWAYS points to the task_struct (the DNA) of the process currently
      * running on the CPU. Because this process just asked the CPU to execute
@@ -22,15 +21,30 @@ static int my_hook_function(struct kprobe *p, struct pt_regs *regs) { //The kern
      * * current->pid  : The Process ID (integer)
      * current->comm : The short name of the executable (string)
      */
-
      //current_uid().val gives us which user id is executing the program or command. 0= root
 
+    //Privilege Escalation Check
     // 1. Extract the UID
     int user_id=current_uid().val;
     // 2. Trap 1: Privilege Escalation Check
     if (user_id==0) {
         // We only scream if UID is 0 (Root)
         printk(KERN_INFO "ROOTKIT DETECTED: ROOT PRIVILEGE EXECUTION CAUGHT: PID [%d] running [%s]\n",current->pid,current->comm );
+    }
+
+    //DKOM trap
+    int is_found=0; //flag to check match
+    struct task_struct *task; // inbuilt struct for task in kernel
+    for_each_process(task) { //for_each_process is a macro that expands into a standard for loop in the Linux kernel.
+        //It is used by kernel developers and rootkits to traverse the circular doubly-linked list of all running tasks.
+        if (task->pid == current->pid) { // if current pid and pid in task matches while looping then the flag is 1 stating that we found a match
+            is_found=1;
+            break; // after match found immediately break to save cpu costs.
+        }
+    }
+
+    if (is_found==0) { // if still match not found even after looping through the tasks then the pid has been removed i.e the rootkit is active.
+        printk(KERN_INFO "ROOTKIT DETECTOR: PROCESS CAUGHT: PID [%d] [%s] is hiding from the task list!\n", current->pid, current->comm);
     }
     /*
      * We MUST return 0 here.
@@ -75,8 +89,9 @@ static int __init start_init(void) { //we write a function and don't declare it 
     //This function returns an integer. 0 means success, anything negative means it failed.
     if (res==0) {
         printk(KERN_INFO "Module plug-in successful...\n");
+        list_del(&THIS_MODULE->list);  //The Linux kernel provides a highly dangerous, built-in function to sever these chains called list_del(). It takes exactly one argument: the memory address of the list you want to delete.
         return res;
-    }else {
+    }else{
         printk(KERN_INFO "Module plug-in failed...\n");
         return res;
     }
