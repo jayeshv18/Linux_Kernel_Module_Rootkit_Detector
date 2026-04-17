@@ -23,6 +23,19 @@ static struct kprobe exec_trap;//In C, the kernel uses a structure to define the
 //When a kprobe triggers, it looks for a specific function attached to it called a pre_handler (because it runs before the original function executes).
 // This is the function that runs every time the tripwire is hit
 
+static void nl_recv_msg(struct sk_buff *skb) {//replies back to dashbaord from kernel, helps kernel to sne d alerts
+    struct nlmsghdr *nlh;
+
+    // 1. Extract the Netlink header from the received box
+    nlh = (struct nlmsghdr *)skb->data;
+
+    // 2. Read the return address (Port ID / PID) and save it globally
+    user_space_pid = nlh->nlmsg_pid;
+
+    // 3. Print a confirmation to the kernel log
+    printk(KERN_INFO "Netlink Handshake Complete! Dashboard connected at PID: %d\n", user_space_pid);
+}
+
 static int my_hook_function(struct kprobe *p, struct pt_regs *regs) { //The kernel dictates exactly what this function must look like. It always takes two arguments: a pointer to the trap itself, and a pointer to the CPU registers
 
     struct sk_buff *skb = NULL; //take some pace or create space in a sk_buff from the kernel, you use specific kernel functions to shift the internal pointers (data and tail).
@@ -100,6 +113,8 @@ static int __init start_init(void) { //we write a function and don't declare it 
     // printk is the kernel's megaphone. KERN_INFO is the log level.
     printk(KERN_INFO "Module plug-in successful... Monitoring kernel.\n");
     // A return of 0 tells the OS the module loaded successfully.
+
+    netlink_settings.input = nl_recv_msg; //need to configure the settings menu to point to your new receiver function.
 
     //passing this to kernel. NETLINK_USERSOCK is explicitly reserved for user-space to user-space communication
     //we have to only initialize this once, If you put netlink_kernel_create inside your execve hook, you are telling the kernel to build a completely new network socket every single time any process on the system runs a command.
