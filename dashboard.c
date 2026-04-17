@@ -44,4 +44,37 @@ int main() {
 
     //A Netlink message is structured with a header (struct nlmsghdr) followed immediately by the payload.
     strcpy(NLMSG_DATA(nlh), "KNOCK");
+
+    /*Now we have to hand it to the Linux kernel.
+     *The sendmsg() and recvmsg() system calls in C don't accept raw data pointers. They require the data to be packaged inside two very specific,
+     *highly optimized structures: an I/O Vector (struct iovec) and a Message Header (struct msghdr).
+     *Think of the iovec as a forklift pallet, and the msghdr as the shipping manifest.
+     */
+
+    struct iovec iov;
+    struct msghdr msg;
+
+    iov.iov_base=(void *)nlh; //Set iov.iov_base to your Netlink header pointer (void *)nlh
+    iov.iov_len=nlh->nlmsg_len; //our header's length
+
+    memset(&msg,0,sizeof(msg));
+    msg.msg_name=(void *)&dest_addr; //point to our destination address
+    msg.msg_namelen=sizeof(dest_addr);
+    msg.msg_iov=&iov; //point to our pallet
+    msg.msg_iovlen=1; //since we only have one pallet
+
+    sendmsg(sock, &msg, 0); //fire the packet down the pipe
+    printf("Sendmsg attempted!\n");
+
+    while (1) {
+        ssize_t val= recvmsg(sock, &msg, 0); //This function will permanently block and wait until the kernel fires an sk_buff back up the pipe
+        //When it catches something, use a printf to display the payload.
+        //We can extract the string the exact same way we wrote it: (char *)NLMSG_DATA(nlh).
+        if (val > 0) {
+            // Print the payload in bold red text, then reset the color
+            printf("\033[1;31m[CRITICAL ALERT]\033[0m %s\n", (char *)NLMSG_DATA(nlh));
+        } else {
+            printf("[-] Error occurred: %zd\n", val);
+        }
+    }
 }

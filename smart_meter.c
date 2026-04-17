@@ -23,7 +23,7 @@ static struct kprobe exec_trap;//In C, the kernel uses a structure to define the
 //When a kprobe triggers, it looks for a specific function attached to it called a pre_handler (because it runs before the original function executes).
 // This is the function that runs every time the tripwire is hit
 
-static void nl_recv_msg(struct sk_buff *skb) {//replies back to dashbaord from kernel, helps kernel to sne d alerts
+static void nl_recv_msg(struct sk_buff *skb) {//replies back to dashbaord from kernel, helps kernel to send alerts
     struct nlmsghdr *nlh;
 
     // 1. Extract the Netlink header from the received box
