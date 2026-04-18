@@ -8,7 +8,7 @@ It monitors process execution, identifies hidden "ghost" malware, hides its own 
 How it Works:
 
 Operating systems are divided into two worlds: User Space (where normal programs live) and Kernel Space (the absolute core of the operating system that controls the hardware).
-Standard malware operates in User Space. But advanced malware called a Rootkit—infects Kernel Space. Once a rootkit is inside the kernel, it can lie to the antivirus, hide its files, and grant the hacker ultimate "God Mode" access.
+Standard malware operates in User Space. But advanced malware called a Rootkit infects Kernel Space. Once a rootkit is inside the kernel, it can lie to the antivirus, hide its files, and grant the hacker ultimate "God Mode" access.
 
 This project fights fire with fire. It is a kernel module that sits in Ring-0 and acts like an invisible security camera.
 
