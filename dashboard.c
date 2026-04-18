@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <sys/socket.h>
+#include <sys/socket.h> //netwroking socket 
 #include <linux/netlink.h>
 
 #define MAX_PAYLOAD 1024  //In User Space, you don't have kernel macros like nlmsg_new. You have to allocate the memory manually.
