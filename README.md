@@ -1,4 +1,4 @@
-Ring-0 Rootkit & DKOM Detector
+ Rootkit & DKOM Detector
 
 A self-defending Linux Kernel Module (LKM) engineered to detect privilege escalation and Direct Kernel Object Manipulation (DKOM) in real-time.
 
