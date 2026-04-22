@@ -15,9 +15,14 @@
 int main() {
     /*socket() function in C is used to create a communication endpoint,
     returning a socket descriptor (a non-negative integer) that acts like a file handle for network operations.*/
-    int sock=socket(AF_NETLINK, SOCK_RAW, 31); //SOCK_RAW socket type provides direct access to lower-level network protocols and interfaces by bypassing the normal transport layer (TCP/UDP)
+    int sock=socket(AF_NETLINK, SOCK_RAW, NETLINK_USERSOCK); //SOCK_RAW socket type provides direct access to lower-level network protocols and interfaces by bypassing the normal transport layer (TCP/UDP)
     //PF_NETLINK is the protocol family constant used when calling the socket() function to create a Netlink.
     //It provides a full-duplex communication link between kernel modules and user-space processes, acting as a more flexible alternative to ioctl, system calls, or the proc filesystem.
+
+    if (sock<0) {
+        perror("socket creation failed, fatal error!\n");
+        return -1;
+    }
 
     struct sockaddr_nl addr; //declares a variable to hold the address information for a Netlink socket
     addr.nl_family=AF_NETLINK;

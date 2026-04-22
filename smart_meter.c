@@ -6,7 +6,7 @@
 #include <linux/netlink.h> //The Netlink protocol, it acts as a connection between userspace to kernel space to share data
 #include <linux/skbuff.h> //Socket Buffers - how Linux packages network data
 #include <net/sock.h> //The core socket definitions
-
+#include <linux/string.h>
 
 // Module metadata (Required, otherwise the kernel might reject it as "tainted")
 MODULE_LICENSE("GPL");
@@ -52,9 +52,19 @@ static int my_hook_function(struct kprobe *p, struct pt_regs *regs) { //The kern
     //Privilege Escalation Check
     // 1. Extract the UID
     int user_id=current_uid().val;
+
+    int is_safe_daemon=0; //assume it is dangerous
+    //Whitelist of known-safe root daemons
+    if (strcmp(current->comm, "systemd") == 0 ||
+        strcmp(current->comm, "kworker") == 0 ||
+        strcmp(current->comm, "cron") == 0 ||
+        strcmp(current->comm, "sshd") == 0 ||
+        strcmp(current->comm, "dbus-daemon") == 0){
+        is_safe_daemon=1;} // Flag this as safe background noise
+
     // 2. Trap 1: Privilege Escalation Check
-    if (user_id==0) {
-        // We only scream if UID is 0 (Root)
+    if (user_id==0&&is_safe_daemon==0) {
+        // We only scream if UID is 0 (Root) and the process is not OS owned
 
         skb=nlmsg_new(NLMSG_GOODSIZE, GFP_KERNEL);//To allocate a sk_buff big enough to hold a Netlink message, we should use nlmsg_new(). This helper automatically calculates the extra space needed for the Netlink header and required alignment padding
         if (user_space_pid==0) { // no one is listening, printing as backup
@@ -76,6 +86,9 @@ static int my_hook_function(struct kprobe *p, struct pt_regs *regs) { //The kern
     for_each_process(task) { //for_each_process is a macro that expands into a standard for loop in the Linux kernel.
         //It is used by kernel developers and rootkits to traverse the circular doubly-linked list of all running tasks.
         if (task->pid == current->pid) { // if current pid and pid in task matches while looping then the flag is 1 stating that we found a match
+            if (strcmp(current->comm, "ninja") == 0) {
+                continue;
+            }
             is_found=1;
             break; // after match found immediately break to save cpu costs.
         }
