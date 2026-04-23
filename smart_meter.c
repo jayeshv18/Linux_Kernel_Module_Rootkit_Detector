@@ -36,7 +36,8 @@ static void nl_recv_msg(struct sk_buff *skb) {//replies back to dashbaord from k
     printk(KERN_INFO "Netlink Handshake Complete! Dashboard connected at PID: %d\n", user_space_pid);
 }
 
-static int my_hook_function(struct kprobe *p, struct pt_regs *regs) { //The kernel dictates exactly what this function must look like. It always takes two arguments: a pointer to the trap itself, and a pointer to the CPU registers
+static int my_hook_function(struct kprobe *p, struct pt_regs *regs) {
+    //The kernel dictates exactly what this function must look like. It always takes two arguments: a pointer to the trap itself, and a pointer to the CPU registers
 
     struct sk_buff *skb = NULL; //take some pace or create space in a sk_buff from the kernel, you use specific kernel functions to shift the internal pointers (data and tail).
 
@@ -47,48 +48,41 @@ static int my_hook_function(struct kprobe *p, struct pt_regs *regs) { //The kern
      * * current->pid  : The Process ID (integer)
      * current->comm : The short name of the executable (string)
      */
-     //current_uid().val gives us which user id is executing the program or command. 0= root
+    //current_uid().val gives us which user id is executing the program or command. 0= root
 
     //Privilege Escalation Check
     // 1. Extract the UID
     int user_id=current_uid().val;
 
-    int is_safe_daemon=0; //assume it is dangerous
-    //Whitelist of known-safe root daemons
-    if (strcmp(current->comm, "systemd") == 0 ||
-        strcmp(current->comm, "kworker") == 0 ||
-        strcmp(current->comm, "cron") == 0 ||
-        strcmp(current->comm, "sshd") == 0 ||
-        strcmp(current->comm, "dbus-daemon") == 0){
-        is_safe_daemon=1;} // Flag this as safe background noise
-
     // 2. Trap 1: Privilege Escalation Check
-    if (user_id==0&&is_safe_daemon==0) {
-        // We only scream if UID is 0 (Root) and the process is not OS owned
-
+    if (user_id==0) {
         skb=nlmsg_new(NLMSG_GOODSIZE, GFP_KERNEL);//To allocate a sk_buff big enough to hold a Netlink message, we should use nlmsg_new(). This helper automatically calculates the extra space needed for the Netlink header and required alignment padding
         if (user_space_pid==0) { // no one is listening, printing as backup
             printk(KERN_INFO "ROOTKIT DETECTED: ROOT PRIVILEGE EXECUTION CAUGHT: PID [%d] running [%s]\n",current->pid,current->comm );
             kfree_skb(skb); //free mem
         }else {
-            const char *alert = "ROOTKIT DETECTED!";
-            int payload_len = strlen(alert) + 1;
+            char payload_buffer[256];
+
+            /*function used to format and store a series of characters and values in a buffer, similar to sprintf but with a size argument to prevent buffer overflows.
+             *It writes at most size-1 characters, followed by a null terminator (\0), making it safer than sprintf.*/
+
+            snprintf(payload_buffer,sizeof(payload_buffer),"UID0_EXEC:%s",current->comm);
+            int payload_len = strlen(payload_buffer) + 1;
             struct nlmsghdr *nlh=nlmsg_put(skb,0,0,NLMSG_DONE,payload_len,0);
-            strncpy(nlmsg_data(nlh), alert, payload_len);
+            strncpy(nlmsg_data(nlh), payload_buffer, payload_len);
             netlink_unicast(nl_sk, skb, user_space_pid,MSG_DONTWAIT);
 
         }
     }
+
 
     //DKOM trap
     int is_found=0; //flag to check match
     struct task_struct *task; // inbuilt struct for task in kernel
     for_each_process(task) { //for_each_process is a macro that expands into a standard for loop in the Linux kernel.
         //It is used by kernel developers and rootkits to traverse the circular doubly-linked list of all running tasks.
-        if (task->pid == current->pid) { // if current pid and pid in task matches while looping then the flag is 1 stating that we found a match
-            if (strcmp(current->comm, "ninja") == 0) {
-                continue;
-            }
+        // if current pid and pid in task matches while looping then the flag is 1 stating that we found a match
+        if (task->pid==current->pid) {
             is_found=1;
             break; // after match found immediately break to save cpu costs.
         }
@@ -101,10 +95,15 @@ static int my_hook_function(struct kprobe *p, struct pt_regs *regs) { //The kern
             printk(KERN_INFO "ROOTKIT DETECTED: ROOT PRIVILEGE EXECUTION CAUGHT: PID [%d] running [%s]\n",current->pid,current->comm );
             kfree_skb(skb); //free mem
         }else {
-            const char *alert = "GHOST DETECTED!";
-            int payload_len = strlen(alert) + 1;
+            char payload_buffer[256];
+
+            /*function used to format and store a series of characters and values in a buffer, similar to sprintf but with a size argument to prevent buffer overflows.
+             *It writes at most size-1 characters, followed by a null terminator (\0), making it safer than sprintf.*/
+
+            snprintf(payload_buffer,sizeof(payload_buffer),"GHOST_EXEC:%s",current->comm);
+            int payload_len = strlen(payload_buffer) + 1;
             struct nlmsghdr *nlh=nlmsg_put(skb,0,0,NLMSG_DONE,payload_len,0);
-            strncpy(nlmsg_data(nlh), alert, payload_len);
+            strncpy(nlmsg_data(nlh), payload_buffer, payload_len);
             netlink_unicast(nl_sk, skb, user_space_pid,MSG_DONTWAIT);
 
         }
