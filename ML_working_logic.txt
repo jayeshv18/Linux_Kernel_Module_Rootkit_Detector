@@ -1,0 +1,5 @@
+Calibration Phase: For the first 50 commands, the AI just sits and watches. It builds a frequency map of your Ubuntu server's background noise (how often sshd or run-parts executes).
+
+The Training: Once it hits 50 events, it feeds that math into the Isolation Forest to define what "Normal" looks like.
+
+The Hunt: From that moment on, if a process executes that doesn't fit the mathematical baseline (like a hacker running ls once), the AI flags it as an anomaly. And if it sees GHOST_EXEC from Trap 2, it bypasses the AI entirely and screams bloody murder because DKOM is a 100% hard threat.
