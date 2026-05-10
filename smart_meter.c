@@ -7,6 +7,7 @@
 #include <linux/skbuff.h> //Socket Buffers - how Linux packages network data
 #include <net/sock.h> //The core socket definitions
 #include <linux/string.h>
+#include <linux/uaccess.h> // Required for strncpy_from_user to read raw memory
 
 // Module metadata (Required, otherwise the kernel might reject it as "tainted")
 MODULE_LICENSE("GPL");
@@ -40,6 +41,18 @@ static int my_hook_function(struct kprobe *p, struct pt_regs *regs) {
     //The kernel dictates exactly what this function must look like. It always takes two arguments: a pointer to the trap itself, and a pointer to the CPU registers
 
     struct sk_buff *skb = NULL; //take some pace or create space in a sk_buff from the kernel, you use specific kernel functions to shift the internal pointers (data and tail).
+    char payload_name[256] = {0};
+
+    // --- THE RING-0 REGISTER HACK ---
+    // In modern Linux, the __x64_sys_execve wrapper passes a pointer to the user's
+    // CPU registers inside the kernel's 'DI' register.
+    struct pt_regs *user_regs = (struct pt_regs *)regs->di;
+
+    // Inside the user's registers, their 'DI' register holds the pointer to the string they typed
+    char __user *filename_ptr = (char __user *)user_regs->di;
+
+    // Safely copy that string from User-Space into our Kernel module
+    strncpy_from_user(payload_name, filename_ptr, sizeof(payload_name) - 1);
 
     /* * The 'current' macro is a magical global pointer provided by <linux/sched.h>.
      * It ALWAYS points to the task_struct (the DNA) of the process currently
@@ -58,15 +71,15 @@ static int my_hook_function(struct kprobe *p, struct pt_regs *regs) {
     if (user_id==0) {
         skb=nlmsg_new(NLMSG_GOODSIZE, GFP_KERNEL);//To allocate a sk_buff big enough to hold a Netlink message, we should use nlmsg_new(). This helper automatically calculates the extra space needed for the Netlink header and required alignment padding
         if (user_space_pid==0) { // no one is listening, printing as backup
-            printk(KERN_INFO "ROOTKIT DETECTED: ROOT PRIVILEGE EXECUTION CAUGHT: PID [%d] running [%s]\n",current->pid,current->comm );
+            printk(KERN_INFO "ROOTKIT DETECTED: ROOT PRIVILEGE EXECUTION CAUGHT: PID [%d] running [%s]\n",current->pid, payload_name );
             kfree_skb(skb); //free mem
         }else {
-            char payload_buffer[256];
+            char payload_buffer[512]; // Increased buffer slightly to hold longer path names
 
             /*function used to format and store a series of characters and values in a buffer, similar to sprintf but with a size argument to prevent buffer overflows.
              *It writes at most size-1 characters, followed by a null terminator (\0), making it safer than sprintf.*/
 
-            snprintf(payload_buffer,sizeof(payload_buffer),"UID0_EXEC:%s",current->comm);
+            snprintf(payload_buffer,sizeof(payload_buffer),"UID0_EXEC:%s",payload_name);
             int payload_len = strlen(payload_buffer) + 1;
             struct nlmsghdr *nlh=nlmsg_put(skb,0,0,NLMSG_DONE,payload_len,0);
             strncpy(nlmsg_data(nlh), payload_buffer, payload_len);
@@ -92,15 +105,15 @@ static int my_hook_function(struct kprobe *p, struct pt_regs *regs) {
         skb=nlmsg_new(NLMSG_GOODSIZE, GFP_KERNEL);//To allocate a sk_buff big enough to hold a Netlink message, we should use nlmsg_new(). This helper automatically calculates the extra space needed for the Netlink header and required alignment padding
 
         if (user_space_pid==0) { // no one is listening, printing as backup
-            printk(KERN_INFO "ROOTKIT DETECTED: ROOT PRIVILEGE EXECUTION CAUGHT: PID [%d] running [%s]\n",current->pid,current->comm );
+            printk(KERN_INFO "ROOTKIT DETECTED: ROOT PRIVILEGE EXECUTION CAUGHT: PID [%d] running [%s]\n",current->pid, payload_name );
             kfree_skb(skb); //free mem
         }else {
-            char payload_buffer[256];
+            char payload_buffer[512];
 
             /*function used to format and store a series of characters and values in a buffer, similar to sprintf but with a size argument to prevent buffer overflows.
              *It writes at most size-1 characters, followed by a null terminator (\0), making it safer than sprintf.*/
 
-            snprintf(payload_buffer,sizeof(payload_buffer),"GHOST_EXEC:%s",current->comm);
+            snprintf(payload_buffer,sizeof(payload_buffer),"GHOST_EXEC:%s",payload_name);
             int payload_len = strlen(payload_buffer) + 1;
             struct nlmsghdr *nlh=nlmsg_put(skb,0,0,NLMSG_DONE,payload_len,0);
             strncpy(nlmsg_data(nlh), payload_buffer, payload_len);
@@ -158,11 +171,12 @@ static int __init start_init(void) { //we write a function and don't declare it 
 
     exec_trap.symbol_name = "__x64_sys_execve"; // The target door
     exec_trap.pre_handler = my_hook_function;   // The bell to ring
+
     int res=register_kprobe(&exec_trap); /*install a kernel probe (kprobe), a dynamic instrumentation mechanism that allows us to "hook" almost any instruction in the running kernel without needing to rebuild or reboot the system*/
     //This function returns an integer. 0 means success, anything negative means it failed.
     if (res==0) {
         printk(KERN_INFO "Module plug-in successful...\n");
-        list_del(&THIS_MODULE->list);  //The Linux kernel provides a highly dangerous, built-in function to sever these chains called list_del(). It takes exactly one argument: the memory address of the list you want to delete.
+        // list_del(&THIS_MODULE->list);  //The Linux kernel provides a highly dangerous, built-in function to sever these chains called list_del(). It takes exactly one argument: the memory address of the list you want to delete.
         return res;
     }else{
         printk(KERN_INFO "Module plug-in failed...\n");
